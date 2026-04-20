@@ -16,7 +16,9 @@ typedef struct{
   Entity *player;
   Camera2D *camera;
   Maps *maps;
+  Texture2D textures;
   uint32_t currentMap;
+  bool isDead;
 } Scene;
 
 void UpdateScene(Scene *scene);

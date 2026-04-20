@@ -21,11 +21,11 @@ int main(){
   // MAPS 
   uint32_t Map[MAPCOUNT][MAPWIDTH*MAPHEIGHT] = {
     {
-      0,10,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,
-      1,1,1,1,1,1,1,1,1,1
+      11,0,10,0,0,0,0,0,0,0,
+      11,0,0,0,0,0,0,0,0,0,
+      11,0,0,0,0,15,0,0,0,0,
+      2,1,1,1,1,1,1,1,1,3,
+      6,7,7,7,7,7,7,7,7,8
     }
   };
 
@@ -40,14 +40,16 @@ int main(){
   camera.zoom           = 1.0f;
 
   // Initialize PLAYER 
-  Entity player = EntityNew((Vector2){250, 250}, (Rectangle){0, 0, PLAYER_WIDTH, PLAYER_HEIGHT}, 100);
+  Entity player = EntityNew((Vector2){250, 250});
 
   // Initialize scene 
   scene.sceneType = SCENE_GAMEPLAY;
   scene.player = &player;
+  scene.isDead = false;
   scene.camera = &camera;
   scene.maps = &maps;
   scene.currentMap = 0;
+  scene.textures = LoadTexture("resources/textures/textures.png");
 
   // NOTE: temporary set player position
   resetPlayerPosition(&player, &maps.tileMaps[scene.currentMap]);
@@ -61,6 +63,7 @@ int main(){
   //emscripten_set_main_loop(UpdateGame, 0, 1);
 
   FreeMaps(&maps);
+  UnloadTexture(scene.textures);
   CloseWindow();
   return 0;
 }
@@ -81,7 +84,8 @@ static void UpdateGame(void){
     EndMode2D();
 
     // DEBUGGING
-    if(DEBUG_MODE)
+    if(DEBUG_MODE){
       DrawFPS(SCREENWIDTH - 100, 10);
+    }
   EndDrawing();
 }

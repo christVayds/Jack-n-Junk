@@ -1,6 +1,9 @@
 #ifndef GAME_H
 #define GAME_H
 
+#include <stdint.h>
+#include <raylib.h>
+
 #define SCREENWIDTH 800
 #define SCREENHEIGHT 500
 #define MAXFPS 60
@@ -18,11 +21,8 @@
 #define DEBUG_MODE true
 
 // ENTITY
-#define PLAYER_WIDTH 32
-#define PLAYER_HEIGHT 64
-
-#include <stdint.h>
-#include <raylib.h>
+#define PLAYER_WIDTH 48
+#define PLAYER_HEIGHT 48
 
 typedef struct{
   int32_t startX, startY, endX, endY;
