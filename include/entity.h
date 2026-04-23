@@ -5,6 +5,14 @@
 #include <stdint.h>
 #include "map.h"
 
+typedef enum{
+  ENTITY_RUN,
+  ENTITY_IDLE,
+  ENTITY_JUMP,
+  ENTITY_LAND,
+  ENTITY_LOW
+} EntityState;
+
 typedef struct{
   Vector2 position;
   Rectangle textureRec;
@@ -14,13 +22,18 @@ typedef struct{
   float friction; 
   bool isGround;
   float jumpForce;
-  int32_t life;
+  int32_t life;       // max 3 
   bool isAlive;
-  bool isOnPlatform;
+  float battery;    // entity battery life
+  int32_t batteryDisplay;
+  //bool isOnPlatform;
+  int32_t currentFrame;
+  int32_t frameCounter;
 } Entity;
 
 Entity EntityNew(Vector2 position);
 void EntitySetPosition(Entity *entity, Vector2 position);
+void EntityUpdate(Entity *entity);
 void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *camera);
 void EntityDraw(Entity *entity, Texture2D texture);
 

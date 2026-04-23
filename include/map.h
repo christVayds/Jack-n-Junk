@@ -11,7 +11,13 @@ typedef enum{
   TILE_WALL,
   TILE_DEADLY,
   TILE_BORDER,
-  TILE_MOVE
+  TILE_MOVE,
+  TILE_SPRINT,
+  TILE_OTHER,
+  TILE_MACHINE,
+  TILE_MACHINEPLATFORM,
+  TILE_TEXT,
+  TILE_FLOWER
 } TileType;
 
 typedef struct{
@@ -23,6 +29,12 @@ typedef struct{
   bool playerEnter;
   bool playerEntered;
   bool visible;
+  int32_t currentFrame;
+  int32_t frameCounter;
+  uint32_t depth;
+  char* text;
+  bool canCollide;
+  int32_t animX;    // x position of the first frame from the texture
 } Tile;
 
 typedef struct{
@@ -39,7 +51,7 @@ typedef struct{
 
 bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]);
 void UpdateMaps(TileMap *tileMap, const float dt);
-void DrawMaps(TileMap *tileMap, Texture2D texture);
+void DrawMaps(TileMap *tileMap, Texture2D texture, Font font, const uint32_t depth);
 void FreeMaps(Maps *maps);
 Tile *GetTileCollide(Rectangle entityRec, TileMap *tileMap, WorldPoints *worlPoints);
 #endif

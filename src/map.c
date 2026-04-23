@@ -1,6 +1,19 @@
 #include <stdlib.h>
 #include "map.h"
 
+static void AnimateTile(Tile *tile){
+  tile->frameCounter++;
+  if(tile->frameCounter >= (MAXFPS / FRAMESPEED)){
+    tile->frameCounter = 0;
+    tile->currentFrame++;
+    
+    // frame end 
+    if(tile->currentFrame > 3)
+      tile->currentFrame = 0;
+    tile->textureRec.x = tile->animX + tile->currentFrame * tile->textureRec.width;
+  }
+}
+
 bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
   maps->tileMaps = (TileMap*)malloc(sizeof(TileMap)*MAPCOUNT);
   if(!maps->tileMaps) return false;
@@ -25,6 +38,12 @@ bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
       tile.playerEnter = false;
       tile.playerEntered = false;
       tile.visible = true;
+      tile.currentFrame = 0;
+      tile.frameCounter = 0;
+      tile.depth = 0;
+      tile.text = NULL;
+      tile.canCollide = true;
+      tile.animX = 0;
       
       switch(Map[i][j]){
         case 0:{  // AIR 
@@ -85,12 +104,13 @@ bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
         case 11:{ // INVISIBLE BLOCK
           tile.tileType = TILE_BORDER;
           tile.visible = false;
+          tile.textureRec = (Rectangle){0, 0, TILESIZE, TILESIZE};
           break;
         }
-        case 12:{ // MOVING VERTICAL TILES  TODO: FIX THIS 
+        case 12:{ // MOVING VERTICAL TILES 
           tile.tileType = TILE_MOVE;
-          tile.textureRec = (Rectangle){32, 32, TILESIZE, TILESIZE};
-          tile.velocity = (Vector2){64, 0};
+          tile.textureRec = (Rectangle){96, 64, 64, 32};
+          tile.velocity = (Vector2){240, 0};
           break;
         }
         case 13:{ // MOVING HORIZONTAL TILES TODO: FIX THIS
@@ -104,10 +124,166 @@ bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
           tile.textureRec = (Rectangle){96, 0, TILESIZE, TILESIZE};
           break;
         }
-        case 15:{ // HIDDING SPIKE TILES 
+        case 15:{ // HIDDING SPIKE TILES  / TO BE REMOVED
           tile.tileType = TILE_DEADLY;
           tile.textureRec = (Rectangle){96, 0, TILESIZE, TILESIZE};
           tile.visible = false;
+          break;
+        }
+        // SPRINT TILE RIGHT DIRECTION
+        case 16:{ // SPRINT TILE LEFT SIZE 
+          tile.tileType = TILE_SPRINT;
+          tile.textureRec = (Rectangle){160, 0, TILESIZE, TILESIZE};
+          tile.velocity = (Vector2){1, 0};
+          break;
+        }
+        case 17:{ // SPRINT TILE MIDDLE
+          tile.tileType = TILE_SPRINT;
+          tile.textureRec = (Rectangle){160, 32, TILESIZE, TILESIZE};
+          tile.velocity = (Vector2){1, 0};
+          tile.animX = 160;
+          break;
+        }
+        case 18:{ // SPRINT TILE RIGHT
+          tile.tileType = TILE_SPRINT;
+          tile.textureRec = (Rectangle){160, 64, TILESIZE, TILESIZE};
+          tile.velocity = (Vector2){1, 0};
+          tile.animX = 160;
+          break;
+        }
+        // SPRINT TILE LEFT DIRECTION
+        case 19:{ // SPRINT TILE LEFT SIZE 
+          tile.tileType = TILE_SPRINT;
+          tile.textureRec = (Rectangle){160, 0, TILESIZE, TILESIZE};
+          tile.velocity = (Vector2){-1, 0};
+          tile.animX = 160;
+          break;
+        }
+        case 20:{ // SPRINT TILE MIDDLE
+          tile.tileType = TILE_SPRINT;
+          tile.textureRec = (Rectangle){160, 32, TILESIZE, TILESIZE};
+          tile.velocity = (Vector2){-1, 0};
+          tile.animX = 160;
+          break;
+        }
+        case 21:{ // SPRINT TILE MIDDLE
+          tile.tileType = TILE_SPRINT;
+          tile.textureRec = (Rectangle){160, 64, TILESIZE, TILESIZE};
+          tile.velocity = (Vector2){-1, 0};
+          tile.animX = 160;
+          break;
+        }
+        case 22:{  // BLOCK (TOP-LEFT BORDER)
+          tile.tileType = TILE_BLOCK;
+          tile.textureRec = (Rectangle){0, 96, TILESIZE, TILESIZE};
+          break;
+        }
+        case 23:{  // BLOCK (TOP-RIGHT BORDER)
+          tile.tileType = TILE_BLOCK;
+          tile.textureRec = (Rectangle){0, 128, TILESIZE, TILESIZE};
+          break;
+        }
+        case 24:{  // BLOCK (FULL BORDER)
+          tile.tileType = TILE_BLOCK;
+          tile.textureRec = (Rectangle){0, 160, TILESIZE, TILESIZE};
+          break;
+        }
+        case 25:{  // BLOCK (SIZE BORDER)
+          tile.tileType = TILE_BLOCK;
+          tile.textureRec = (Rectangle){0, 192, TILESIZE, TILESIZE};
+          break;
+        }
+        case 26:{  // TRASH
+          tile.tileType = TILE_OTHER;
+          tile.textureRec = (Rectangle){0, 224, TILESIZE, TILESIZE};
+          tile.depth = 1;
+          tile.canCollide = false;
+          break;
+        }
+        case 27:{  // STICK
+          tile.tileType = TILE_OTHER;
+          tile.textureRec = (Rectangle){0, 256, TILESIZE, TILESIZE};
+          tile.depth = 1;
+          tile.canCollide = false;
+          break;
+        }
+        case 28:{  // SMALL STICK
+          tile.tileType = TILE_OTHER;
+          tile.textureRec = (Rectangle){0, 288, TILESIZE, TILESIZE};
+          tile.depth = 1;
+          tile.canCollide = false;
+          break;
+        }
+        case 29:{  // Jack wreak head
+          tile.tileType = TILE_OTHER;
+          tile.textureRec = (Rectangle){0, 320, TILESIZE, TILESIZE};
+          tile.depth = 1;
+          tile.canCollide = false;
+          break;
+        }
+        case 30:{  // Jack wreak body
+          tile.tileType = TILE_OTHER;
+          tile.textureRec = (Rectangle){0, 352, PLAYER_WIDTH, TILESIZE};
+          tile.depth = 1;
+          tile.canCollide = false;
+          break;
+        }
+        case 31:{  // Sign board
+          tile.tileType = TILE_OTHER;
+          tile.textureRec = (Rectangle){0, 384, 48, 48};
+          tile.position.y -= tile.textureRec.height - TILESIZE;
+          tile.canCollide = false;
+          break;
+        }
+        case 32:{  // Bridge
+          tile.tileType = TILE_OTHER;
+          tile.textureRec = (Rectangle){0, 432, 144, 32};
+          tile.canCollide = false;
+          break;
+        }
+        case 33:{  // Charge
+          tile.tileType = TILE_MACHINE;
+          tile.textureRec = (Rectangle){288, 0, 48, 64};
+          tile.position.y -= tile.textureRec.height - TILESIZE;
+          tile.canCollide = false;
+          tile.animX = 288;
+          break;
+        }
+        case 34:{  // Push upward
+          tile.tileType = TILE_MACHINE;
+          tile.textureRec = (Rectangle){336, 64, TILESIZE, TILESIZE};
+          tile.velocity = (Vector2){0, -1};
+          break;
+        }
+        case 35:{  // Text 
+          tile.tileType = TILE_TEXT;
+          tile.text = "Get the flower and protect it.";
+          tile.canCollide = false;
+          break;
+        }
+        case 36:{ // WASD CONTROL
+          tile.tileType = TILE_OTHER;
+          tile.textureRec = (Rectangle){0, 528, 128, 65};
+          tile.canCollide = false;
+          break;
+        }
+        case 37:{ // Sunflower
+          tile.tileType = TILE_FLOWER;
+          tile.textureRec = (Rectangle){480, 0, 16, 32};
+          //tile.canCollide = false;
+          tile.animX = 480;
+          break;
+        }
+        case 38:{  // Text 
+          tile.tileType = TILE_TEXT;
+          tile.text = "Jump here";
+          tile.canCollide = false;
+          break;
+        }
+        case 39:{  // Text 
+          tile.tileType = TILE_TEXT;
+          tile.text = "Find the Life Machine Before your battery died.";
+          tile.canCollide = false;
           break;
         }
         default:{ // DEFAULT
@@ -140,7 +316,7 @@ void UpdateMaps(TileMap *tileMap, const float dt){
     for(uint32_t x=0;x<MAPWIDTH;x++){
       const uint32_t index = y * MAPWIDTH + x;
       Tile *tile = &tileMap->tiles[index]; 
-      if(tile->visible)
+      if(tile->visible){
         switch(tile->tileType){
           default:
             break;
@@ -154,6 +330,21 @@ void UpdateMaps(TileMap *tileMap, const float dt){
             }
             break;
           }
+          case TILE_SPRINT:{
+            if(tile->animX)
+              AnimateTile(tile);
+            break;
+          }
+          case TILE_MACHINE:{
+            if(tile->animX)
+              AnimateTile(tile);
+            break;
+          }
+          case TILE_FLOWER:{
+            if(tile->animX)
+              AnimateTile(tile);
+          }
+        }
       }
     }
   }
@@ -161,14 +352,20 @@ void UpdateMaps(TileMap *tileMap, const float dt){
 
 
 // TODO: ADD WORLDPOINTS
-void DrawMaps(TileMap *tileMap, Texture2D texture){
+void DrawMaps(TileMap *tileMap, Texture2D texture, Font font, const uint32_t depth){
   for(uint32_t y=0;y<MAPHEIGHT;y++){
     for(uint32_t x=0;x<MAPWIDTH;x++){
       const uint32_t index = y * MAPWIDTH + x;
-      if(tileMap->tiles[index].tileType && tileMap->tiles[index].visible){
+      Tile *tile = &tileMap->tiles[index];
+      if(tile->tileType && tile->visible && tile->depth == depth){
         //Rectangle rec = (Rectangle){tileMap->tiles[index].position.x, tileMap->tiles[index].position.y, TILESIZE, TILESIZE}; 
         //DrawRectangleRec(rec, WHITE);
-        DrawTextureRec(texture, tileMap->tiles[index].textureRec, tileMap->tiles[index].position, WHITE);
+        
+        // DRAW TEXT 
+        if(tile->tileType == TILE_TEXT)
+          DrawTextEx(font, tile->text, tile->position, 16.0f, 1, WHITE);
+        else // DRAW TEXTURE
+          DrawTextureRec(texture, tile->textureRec, tile->position, WHITE);
       }
     }
   }
@@ -184,20 +381,25 @@ void FreeMaps(Maps *maps){
 }
 
 Tile *GetTileCollide(Rectangle entityRec, TileMap *tileMap, WorldPoints *worlPoints){
-  Tile *tileIndex = NULL;
   for(int32_t y=0;y<MAPHEIGHT;y++){
     for(int32_t x=0;x<MAPWIDTH;x++){
       int32_t index = y * MAPWIDTH + x;
-      Rectangle tileRec = {tileMap->tiles[index].position.x, tileMap->tiles[index].position.y, TILESIZE, TILESIZE};
-      tileMap->tiles[index].playerEnter = false;
+      Tile *tile = &tileMap->tiles[index];
       
-      if(CheckCollisionRecs(entityRec, tileRec) && tileMap->tiles[index].tileType){
-        tileIndex = &tileMap->tiles[index];
-        tileMap->tiles[index].playerEnter = true;
-        tileMap->tiles[index].playerEntered = true;
+      Rectangle tileRec = {tile->position.x, tile->position.y, tile->textureRec.width, tile->textureRec.height};
+      tile->playerEnter = false;
+      
+      if(CheckCollisionRecs(entityRec, tileRec) && tile->tileType && tile->canCollide){
+        if(tile->tileType == TILE_FLOWER){
+          tile->tileType = TILE_AIR;
+          return NULL;
+        }
+        tile->playerEnter = true;
+        tile->playerEntered = true;
+        return tile;
       }
     }
   }
 
-  return tileIndex;
+  return NULL;
 }
