@@ -11,7 +11,8 @@ typedef enum{
   SCENE_INTRO,
   SCENE_MAINMENU,
   SCENE_GAMEPLAY,
-  SCENE_CREDITS
+  SCENE_CREDITS,
+  SCENE_ENDGAME
 } SceneType;
 
 typedef struct{
@@ -26,9 +27,12 @@ typedef struct{
   bool isDead;
   bool paused;
   Texture2D *backgrounds;     // list of backgrounds
+  int32_t currentBg;
   float transitionAlpha;    // transition alpha
   int32_t alphaDir;       // transition alpha direction
   bool doTrans;         // do transition 
+  Sound *sounds;        // sfx
+  Music music;
 } Scene;
 
 void UpdateScene(Scene *scene);

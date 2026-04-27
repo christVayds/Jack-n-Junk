@@ -13,22 +13,25 @@
 
 // TILE MAP 
 #define TILESIZE 32
-#define MAPCOUNT 1
+#define MAPCOUNT 3
 #define MAPWIDTH 40
-#define MAPHEIGHT 10
+#define MAPHEIGHT 20
 
 // BUILD MODE
-#define DEBUG_MODE true
+#define DEBUG_MODE false
 
 // ENTITY
 #define PLAYER_WIDTH 48
 #define PLAYER_HEIGHT 48
 
 // RECT 
-#define YANJILOGO (Rectangle){510, 510, 450, 450}
+#define YANJILOGO (Rectangle){0, 672, 225, 225}
 
 // ANIMATION
 #define FRAMESPEED 8
+
+#define SOUNDCOUNT 3
+#define BACKGROUNDCOUNT 2
 
 typedef struct{
   int32_t startX, startY, endX, endY;

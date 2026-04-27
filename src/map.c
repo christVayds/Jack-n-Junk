@@ -1,5 +1,20 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include "map.h"
+
+#define MAPTEXTLIMIT 8
+
+int32_t mapTextCountGet = 0;
+char* mapTexts[MAPTEXTLIMIT] = {
+  "You got the flower, \nnow find the LIFE MACHINE before your battery died.",
+  "Get the flower and protect it",
+  "Jump here",
+  "Straigth ahead",
+  "Straigth ahead",
+  "Watch out for deadly spikes",
+  "Find the sunflower",
+  "Horizontal conveyor, can save your battery life"
+};
 
 static void AnimateTile(Tile *tile){
   tile->frameCounter++;
@@ -14,9 +29,21 @@ static void AnimateTile(Tile *tile){
   }
 }
 
-bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
+void ResetMap(Maps *maps){
+  for(uint32_t i=0;i<MAPCOUNT;i++){
+    for(uint32_t j=0;j<MAPWIDTH*MAPHEIGHT;j++){
+      maps->tileMaps[i].tiles[j].tileType = maps->tileMaps[i].tiles[j].originalType;
+    }
+  }
+}
+
+bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){ 
   maps->tileMaps = (TileMap*)malloc(sizeof(TileMap)*MAPCOUNT);
   if(!maps->tileMaps) return false;
+
+  // for signal tile 
+  Tile *reserveTile = NULL;
+  Tile *signalTile = NULL;
 
   for(uint32_t i=0;i<MAPCOUNT;i++){
     // SET TILEMAP
@@ -30,13 +57,12 @@ bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
     Vector2 position = {0,0};
     uint32_t countWidth = 0;
     for(uint32_t j=0;j<MAPWIDTH*MAPHEIGHT;j++){
+      
       // SET TILE 
       Tile tile = {0};
       tile.position = position;
       tile.velocity = (Vector2){0};
       tile.move = false;
-      tile.playerEnter = false;
-      tile.playerEntered = false;
       tile.visible = true;
       tile.currentFrame = 0;
       tile.frameCounter = 0;
@@ -44,6 +70,9 @@ bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
       tile.text = NULL;
       tile.canCollide = true;
       tile.animX = 0;
+      tile.connectedTile = NULL;
+      tile.moveLimit = 0;
+      tile.moveDistance = 0;
       
       switch(Map[i][j]){
         case 0:{  // AIR 
@@ -111,6 +140,8 @@ bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
           tile.tileType = TILE_MOVE;
           tile.textureRec = (Rectangle){96, 64, 64, 32};
           tile.velocity = (Vector2){240, 0};
+          tile.moveLimit = 50;
+          tile.move = true;
           break;
         }
         case 13:{ // MOVING HORIZONTAL TILES TODO: FIX THIS
@@ -257,33 +288,75 @@ bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
         }
         case 35:{  // Text 
           tile.tileType = TILE_TEXT;
-          tile.text = "Get the flower and protect it.";
           tile.canCollide = false;
+          
+          tile.text = mapTexts[mapTextCountGet];
+          mapTextCountGet++;
+          if(mapTextCountGet >= MAPTEXTLIMIT) mapTextCountGet = 0;
           break;
         }
         case 36:{ // WASD CONTROL
           tile.tileType = TILE_OTHER;
           tile.textureRec = (Rectangle){0, 528, 128, 65};
           tile.canCollide = false;
+
+          if(signalTile){
+            signalTile->connectedTile = &tileMap.tiles[j]; 
+            signalTile = NULL;
+          } else {
+            reserveTile = &tileMap.tiles[j];
+          }
           break;
         }
         case 37:{ // Sunflower
           tile.tileType = TILE_FLOWER;
           tile.textureRec = (Rectangle){480, 0, 16, 32};
-          //tile.canCollide = false;
+          
+          if(reserveTile){
+            tile.connectedTile = reserveTile;
+            reserveTile = NULL;
+          } else {
+            signalTile = &tileMap.tiles[j];
+          }
           tile.animX = 480;
           break;
         }
-        case 38:{  // Text 
-          tile.tileType = TILE_TEXT;
-          tile.text = "Jump here";
-          tile.canCollide = false;
+        case 38:{  // NEXT MAP 
+          tile.tileType = TILE_NEXTMAP;
+          tile.textureRec = (Rectangle){0, 0, TILESIZE, 128};
+          tile.position.y -= tile.textureRec.height - TILESIZE;
+          tile.visible = false;
           break;
         }
         case 39:{  // Text 
           tile.tileType = TILE_TEXT;
-          tile.text = "Find the Life Machine Before your battery died.";
+          //tile.text = "Find the Life Machine Before your battery died.";
           tile.canCollide = false;
+          tile.visible = false;
+
+          tile.text = mapTexts[mapTextCountGet];
+          mapTextCountGet++;
+          if(mapTextCountGet > MAPTEXTLIMIT) mapTextCountGet = 0;
+
+          if(signalTile){
+            signalTile->connectedTile = &tileMap.tiles[j]; 
+            signalTile = NULL;
+          } else {
+            reserveTile = &tileMap.tiles[j];
+          }
+          break;
+        }
+        case 40:{ // SIGNAL TILE 
+          tile.tileType = TILE_SIGNAL;
+          tile.visible = false;
+          tile.textureRec = (Rectangle){0, 0, TILESIZE, TILESIZE};
+
+          if(reserveTile){
+            tile.connectedTile = reserveTile;
+            reserveTile = NULL;
+          } else {
+            signalTile = &tileMap.tiles[j];
+          }
           break;
         }
         default:{ // DEFAULT
@@ -291,7 +364,8 @@ bool InitMaps(Maps *maps, uint32_t (*Map)[MAPWIDTH*MAPHEIGHT]){
           break;
         }
       }
-
+      
+      tile.originalType = tile.tileType;
       // push tile to tileMaps
       tileMap.tiles[j] = tile;
       
@@ -321,12 +395,13 @@ void UpdateMaps(TileMap *tileMap, const float dt){
           default:
             break;
           case TILE_MOVE:{
-            if(tile->playerEnter && tile->playerEntered){
-              tile->move = true;
-              tile->position.x += tile->velocity.x * dt;
-              tile->position.y += tile->velocity.y * dt;
-            } else {
-              tile->move = false;
+            tile->position.x += tile->velocity.x * dt;
+            tile->position.y += tile->velocity.y * dt;
+            tile->moveDistance += TILESIZE * dt;
+            
+            if(tile->moveDistance >= tile->moveLimit){
+              tile->velocity.x = tile->velocity.x * -1;
+              tile->moveDistance = 0;
             }
             break;
           }
@@ -352,10 +427,10 @@ void UpdateMaps(TileMap *tileMap, const float dt){
 
 
 // TODO: ADD WORLDPOINTS
-void DrawMaps(TileMap *tileMap, Texture2D texture, Font font, const uint32_t depth){
-  for(uint32_t y=0;y<MAPHEIGHT;y++){
-    for(uint32_t x=0;x<MAPWIDTH;x++){
-      const uint32_t index = y * MAPWIDTH + x;
+void DrawMaps(TileMap *tileMap, Texture2D texture, Font font, const uint32_t depth, WorldPoints *points){
+  for(int32_t y=points->startY;y<points->endY;y++){
+    for(int32_t x=points->startX;x<points->endX;x++){
+      const int32_t index = y * MAPWIDTH + x;
       Tile *tile = &tileMap->tiles[index];
       if(tile->tileType && tile->visible && tile->depth == depth){
         //Rectangle rec = (Rectangle){tileMap->tiles[index].position.x, tileMap->tiles[index].position.y, TILESIZE, TILESIZE}; 
@@ -366,7 +441,11 @@ void DrawMaps(TileMap *tileMap, Texture2D texture, Font font, const uint32_t dep
           DrawTextEx(font, tile->text, tile->position, 16.0f, 1, WHITE);
         else // DRAW TEXTURE
           DrawTextureRec(texture, tile->textureRec, tile->position, WHITE);
-      }
+      } 
+      
+      // NOTE: TEMPORARY, FOR DEBUGGING
+      //else if(!tile->visible && tile->depth == depth)
+        //DrawRectangleLines(tile->position.x, tile->position.y, tile->textureRec.width, tile->textureRec.height, WHITE);
     }
   }
 }
@@ -380,23 +459,41 @@ void FreeMaps(Maps *maps){
   maps->tileMaps = NULL;
 }
 
-Tile *GetTileCollide(Rectangle entityRec, TileMap *tileMap, WorldPoints *worlPoints){
-  for(int32_t y=0;y<MAPHEIGHT;y++){
-    for(int32_t x=0;x<MAPWIDTH;x++){
+Tile *GetTileCollide(Rectangle entityRec, TileMap *tileMap, WorldPoints *worlPoints, int32_t *playerLevel){
+  for(int32_t y=worlPoints->startY;y<worlPoints->endY;y++){
+    for(int32_t x=worlPoints->startX;x<worlPoints->endX;x++){
       int32_t index = y * MAPWIDTH + x;
       Tile *tile = &tileMap->tiles[index];
       
       Rectangle tileRec = {tile->position.x, tile->position.y, tile->textureRec.width, tile->textureRec.height};
-      tile->playerEnter = false;
       
-      if(CheckCollisionRecs(entityRec, tileRec) && tile->tileType && tile->canCollide){
-        if(tile->tileType == TILE_FLOWER){
-          tile->tileType = TILE_AIR;
-          return NULL;
+      if(CheckCollisionRecs(entityRec, tileRec) && tile->tileType && tile->canCollide){ 
+        switch(tile->tileType){
+          case TILE_FLOWER:{
+            tile->tileType = TILE_AIR;
+            if(tile->connectedTile){
+              tile->connectedTile->visible = !tile->connectedTile->visible;
+              tile->connectedTile = NULL;
+            } 
+            return NULL;
+          }
+          case TILE_SIGNAL:{
+            tile->tileType = TILE_AIR;
+            if(tile->connectedTile){
+              tile->connectedTile->visible = !tile->connectedTile->visible;
+              tile->connectedTile = NULL;
+            }
+            return NULL;
+          }
+          case TILE_NEXTMAP:{
+            tile->tileType = TILE_AIR;
+            *playerLevel = *playerLevel + 1;
+            printf("player level up %d\n", *playerLevel);
+            return NULL;
+          }
+          default:
+            return tile;
         }
-        tile->playerEnter = true;
-        tile->playerEntered = true;
-        return tile;
       }
     }
   }

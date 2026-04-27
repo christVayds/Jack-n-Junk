@@ -4,9 +4,13 @@
 
 #define TEXTSPACING 1.0f
 #define MAXTEXT 5
+#define MAXENDINGTEXT 2
 #define FONTSIZE 32.0f
 
 int32_t currentText = 0;
+int32_t prevLevel = 0;
+bool playerWin = false;
+
 char* texts[MAXTEXT] = {
   "Earth is abandoned by humanity a hundred years ago, \nleft to decay under pollution, \nendless waste, and a toxic atmosphere like Venus.",
   "Only machines remained, tasked with studying a dead world\nthat seemed beyond saving.",
@@ -15,16 +19,30 @@ char* texts[MAXTEXT] = {
   "Jack, the last surviving B20W unit, \nmust carry the flower to the LIFE MACHINE, \nracing against his limited battery and his own lack of combat to \nrestore hope for Earth."
 };
 
+int32_t currentEndingText = 0;
+char* endingWin[MAXENDINGTEXT] = {
+  "You successfully send the signal to humans",
+  "the end"
+};
+
+char* endingLoss[MAXENDINGTEXT] = {
+  "Your battery died",
+  "The end"
+};
+
 static void UpdatePlayerCamera(Camera2D *camera, Vector2 *playerposition){
   float smoothSpeed = 0.4f;
   camera->target.x += floorf((playerposition->x - camera->target.x) * smoothSpeed);
   camera->target.y += floorf((playerposition->y - camera->target.y) * smoothSpeed); 
 }
 
+// NOTE: WHY THIS FUNCTION IS IN HERE?
 static void DieAnimation(Scene *scene, const float dt){
   static float countdown = 2.0f;
 
-  if(!scene->player->isAlive && !scene->isDead){ 
+  if(!scene->player->isAlive && !scene->isDead){
+    PlaySound(scene->sounds[1]);
+    scene->player->life -= 1;
     scene->player->velocity.y = 0;
     scene->player->velocity.y -= 500.0f;
     
@@ -51,17 +69,43 @@ static void DieAnimation(Scene *scene, const float dt){
       resetPlayerPosition(scene->player, &scene->maps->tileMaps[scene->currentMap]);
     }
   }
+
+  // if player fall in void
+  if(scene->player->position.y > scene->maps->tileMaps[scene->currentMap].tiles[MAPWIDTH*MAPHEIGHT - 1].position.y)
+    scene->player->isAlive = false;
 }
 
 static void UpdateGameplay(Scene *scene){
   const float dt = GetFrameTime();
 
   UpdateMaps(&scene->maps->tileMaps[scene->currentMap], dt);
+  
+  // check if player is alive
   if(scene->player->isAlive)
     UpdatePlayerCamera(scene->camera, &scene->player->position);
-  
+
+  // check entity level 
+  if(scene->player->level > prevLevel){
+    if(scene->player->level >= MAPCOUNT){
+      playerWin = true;
+      scene->doTrans = true;
+      scene->targetScene = SCENE_ENDGAME;
+    } else {
+      scene->doTrans = true;
+      scene->targetScene = SCENE_GAMEPLAY;
+      prevLevel = scene->player->level;
+    }
+  }
+
+  // update entity battery level
+  if(scene->player->battery <= 0.0f){
+    scene->doTrans = true;
+    scene->targetScene = SCENE_ENDGAME;
+    playerWin = false;
+  }
+   
+  EntityMove(scene->player, dt, &scene->maps->tileMaps[scene->currentMap], scene->camera, scene->sounds);
   EntityUpdate(scene->player);
-  EntityMove(scene->player, dt, &scene->maps->tileMaps[scene->currentMap], scene->camera);
 
   // TODO: FIX THIS
   DieAnimation(scene, dt); 
@@ -69,9 +113,10 @@ static void UpdateGameplay(Scene *scene){
 
 // DRAW GAMEPLAY 
 static void DrawGameplay(Scene *scene){
-  DrawMaps(&scene->maps->tileMaps[scene->currentMap], scene->textures, scene->font, 0);
+  WorldPoints points = BlocksVisibleInCamera(scene->camera);
+  DrawMaps(&scene->maps->tileMaps[scene->currentMap], scene->textures, scene->font, 0, &points);
   EntityDraw(scene->player, scene->textures);
-  DrawMaps(&scene->maps->tileMaps[scene->currentMap], scene->textures, scene->font, 1);
+  DrawMaps(&scene->maps->tileMaps[scene->currentMap], scene->textures, scene->font, 1, &points);
 }
 
 // OPENING SCENE 
@@ -88,7 +133,7 @@ static void DrawOpeningScene(Scene *scene){
     
     if(show == limit){
       scene->doTrans = true;
-      scene->targetScene = SCENE_INTRO;
+      scene->targetScene = SCENE_INTRO; 
       fadeDir = 1;
       fadeAlpha = 1.0f;
     }
@@ -105,9 +150,24 @@ static void DrawOpeningScene(Scene *scene){
   };
  
   if(show){
-    DrawTextureRec(scene->textures, YANJILOGO, (Vector2){scene->camera->target.x - YANJILOGO.width/2, scene->camera->target.y - (YANJILOGO.height/2) - 200}, Fade(WHITE, fadeAlpha)); 
+    DrawTextureRec(scene->textures, YANJILOGO, (Vector2){scene->camera->target.x - YANJILOGO.width/2, scene->camera->target.y - YANJILOGO.height/2 - 100}, Fade(WHITE, fadeAlpha)); 
   } else
     DrawTextEx(scene->font, text, position, FONTSIZE, TEXTSPACING, Fade(WHITE, fadeAlpha));
+}
+
+// DRAW ENDGAME
+static void DrawEndGame(Scene *scene){
+  char** endingText = endingWin;
+  if(!playerWin) endingText = endingLoss;
+
+  Vector2 textSize = MeasureTextEx(scene->font, endingText[currentEndingText], FONTSIZE, TEXTSPACING);
+  Vector2 position = (Vector2){
+    scene->camera->target.x - textSize.x/2, 
+    scene->camera->target.y - FONTSIZE/2
+  };
+
+  DrawTextEx(scene->font, endingText[currentEndingText], position, FONTSIZE, TEXTSPACING, WHITE);
+  DrawTextEx(scene->font, "Press SPACE", (Vector2){scene->camera->target.x, scene->camera->target.y + 200.0f}, FONTSIZE, TEXTSPACING, WHITE);
 }
 
 void UpdateScene(Scene *scene){
@@ -122,14 +182,34 @@ void UpdateScene(Scene *scene){
           scene->sceneType = SCENE_GAMEPLAY;
           scene->camera->offset = (Vector2){GetScreenWidth()/2.0f, (GetScreenHeight()/2.0f) + 128};
           scene->camera->zoom = 2.0f;
-          currentText = 0;
+          scene->currentMap = scene->player->level;
+          resetPlayerPosition(scene->player, &scene->maps->tileMaps[scene->currentMap]);
+          break;
+        }
+        case SCENE_MAINMENU:{
+          scene->camera->zoom = 2.0f;
+          scene->sceneType = SCENE_MAINMENU;
+          resetPlayerPosition(scene->player, &scene->maps->tileMaps[scene->currentMap]);
+          break;
+        }
+        case SCENE_INTRO:{
+          scene->sceneType = SCENE_INTRO;
+          PlayMusicStream(scene->music);
+          break;
+        }
+        case SCENE_ENDGAME:{
+          scene->sceneType = SCENE_ENDGAME;
+          scene->camera->zoom = 1.0f;
+          scene->currentMap = 0;
+          scene->player->level = 0;
+          resetPlayerPosition(scene->player, &scene->maps->tileMaps[scene->currentMap]);
+          ResetMap(scene->maps);
           break;
         }
         default:
-          scene->sceneType = scene->targetScene;
+          scene->sceneType = scene->targetScene; 
           break;
       } 
-      
       scene->alphaDir = -1;
     }
     if(scene->alphaDir < 0 && scene->transitionAlpha <= 0.0f){
@@ -141,6 +221,7 @@ void UpdateScene(Scene *scene){
 
   switch(scene->sceneType){
     case SCENE_MAINMENU:
+      UpdateGameplay(scene);
       break;
     case SCENE_GAMEPLAY:
       UpdateGameplay(scene);
@@ -157,6 +238,12 @@ void InputScene(Scene *scene){
     case SCENE_GAMEPLAY:
       break;
     case SCENE_MAINMENU:
+      if(IsKeyPressed(KEY_D) || IsKeyPressed(KEY_A) || IsKeyPressed(KEY_SPACE)) {
+        //scene->doTrans = true;
+        //scene->targetScene = SCENE_GAMEPLAY;
+        scene->sceneType = SCENE_GAMEPLAY;
+        scene->camera->offset = (Vector2){GetScreenWidth()/2.0f, (GetScreenHeight()/2.0f) + 128};
+      }
       break;
     case SCENE_INTRO:
       if(IsKeyPressed(KEY_SPACE)){
@@ -164,11 +251,22 @@ void InputScene(Scene *scene){
         
         if(currentText >= MAXTEXT){
           scene->doTrans = true;
-          scene->targetScene = SCENE_GAMEPLAY;
+          scene->targetScene = SCENE_MAINMENU;
           currentText = MAXTEXT-1;
         };
       }
       break;
+    case SCENE_ENDGAME:{
+      if(IsKeyPressed(KEY_SPACE)){
+        currentEndingText++;
+
+        if(currentEndingText >= MAXENDINGTEXT){
+          scene->doTrans = true;
+          scene->targetScene = SCENE_MAINMENU;
+          currentEndingText = MAXENDINGTEXT - 1;
+        }
+      }
+    }
     default:
       break;
   }
@@ -177,7 +275,20 @@ void InputScene(Scene *scene){
 void DrawScene(Scene *scene){
   switch(scene->sceneType){
     case SCENE_MAINMENU:
+      // TODO: THIS IS TEMPORARY
+      DrawGameplay(scene);
+      
+      Vector2 position = (Vector2){
+        scene->camera->target.x - 434/2,
+        scene->camera->target.y - 200
+      };
+      
+      DrawTextureRec(scene->textures, (Rectangle){0, 608, 434, 53}, position, WHITE);
+
+      Vector2 textSize = MeasureTextEx(scene->font, "Move to start game", 15.0f, TEXTSPACING);
+      DrawTextEx(scene->font, "Move to start", (Vector2){scene->camera->target.x-textSize.x/2, (scene->camera->target.y-15.0f)+100.0f}, 15.0f, TEXTSPACING, WHITE);
       break;
+    
     case SCENE_GAMEPLAY:{
       DrawGameplay(scene);
       break;
@@ -195,6 +306,10 @@ void DrawScene(Scene *scene){
     }
     case SCENE_OPENING:{
       DrawOpeningScene(scene); 
+      break;
+    }
+    case SCENE_ENDGAME:{
+      DrawEndGame(scene);
       break;
     }
     default:
@@ -217,15 +332,9 @@ void DrawSceneBackground(Scene *scene){
     case SCENE_OPENING:{
       ClearBackground((Color){27, 38, 50, 255});
       break;
-    }
-    case SCENE_GAMEPLAY:{ 
-      DrawTextureEx(scene->backgrounds[0], (Vector2){offsetX, offsetY}, 0.0f, scale, WHITE);    
-      break;
-    }
-    case SCENE_INTRO:{
-      DrawTextureEx(scene->backgrounds[0], (Vector2){offsetX, offsetY}, 0.0f, scale, WHITE);
-    }
+    } 
     default:
+      DrawTextureEx(scene->backgrounds[scene->currentBg], (Vector2){offsetX, offsetY}, 0.0f, scale, WHITE);
       break;
   }
 }

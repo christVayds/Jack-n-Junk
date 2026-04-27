@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+//float stepTimer = 0.0f;
+//float stepDelay = 0.1f;
+
 static void EntityAnimate(Entity *entity){
   entity->frameCounter++;
   
@@ -37,6 +40,7 @@ static void EntityAnimate(Entity *entity){
 
 Entity EntityNew(Vector2 position){
   Entity newEntity = {
+    .entityState = ENTITY_IDLE,
     .position = position,
     .textureRec = (Rectangle){33, 112, PLAYER_WIDTH, PLAYER_HEIGHT},
     .life = 3,
@@ -47,9 +51,10 @@ Entity EntityNew(Vector2 position){
     .velocity = {0},
     .isGround = false,
     .maxSpeed = 300.0f,
-    .friction = 800.0f,
+    .friction = 200.0f,
     .jumpForce = -400.0f,
-    //.isOnPlatform = false,
+    .level = 0,
+    .score = 0,
     .currentFrame = 0,
     .frameCounter = 0
   };
@@ -68,6 +73,26 @@ void EntityUpdate(Entity *entity){
   else if(entity->battery <= 60) entity->batteryDisplay = 480;
   else if(entity->battery <= 80) entity->batteryDisplay = 472;
   else if(entity->battery <= 100) entity->batteryDisplay = 464;
+  
+  /*
+  switch(entity->entityState){
+    case ENTITY_RUN:
+      stepTimer += GetFrameTime();
+      
+      if(!entity->isGround){
+        stepTimer = 0;
+        return;
+      }
+
+      if(stepTimer >= stepDelay){ 
+        PlaySound(sounds[3]);
+        stepTimer = 0;
+      }
+      break;
+    default:
+      stepTimer = 0;
+      break;
+  } */
 }
 
 void EntitySetPosition(Entity *entity, Vector2 position){
@@ -75,7 +100,7 @@ void EntitySetPosition(Entity *entity, Vector2 position){
   entity->position.y = position.y;
 }
 
-void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *camera){
+void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *camera, Sound *sounds){
   Vector2 move = {0};
   
   // check if player is alive
@@ -83,16 +108,20 @@ void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *came
     if(IsKeyDown(KEY_D)){
       entity->battery -= 1 * dt;
       move.x = 1;
+      entity->entityState = ENTITY_RUN;
     }
     if(IsKeyDown(KEY_A)){ 
       entity->battery -= 1 * dt;
       move.x = -1;
+      entity->entityState = ENTITY_RUN;
     }
 
     // JUMP
     if(IsKeyPressed(KEY_SPACE) && entity->isGround){
       entity->battery -= 2 * dt;
-      entity->velocity.y = entity->jumpForce; 
+      entity->velocity.y = entity->jumpForce;
+      entity->entityState = ENTITY_JUMP;
+      PlaySound(sounds[0]);
     }
   } 
 
@@ -104,11 +133,17 @@ void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *came
   if(!IsKeyDown(KEY_D) && !IsKeyDown(KEY_A)){
     if(entity->velocity.x > 0){
       entity->velocity.x -= entity->friction * dt;
-      if(entity->velocity.x < 0) entity->velocity.x = 0;
+      if(entity->velocity.x < 0){
+        entity->velocity.x = 0;
+        entity->entityState = ENTITY_IDLE;
+      }
     } else if(entity->velocity.x < 0){
       entity->velocity.x += entity->friction * dt;
-      if(entity->velocity.x > 0) entity->velocity.x = 0;
-    }
+      if(entity->velocity.x > 0){
+        entity->velocity.x = 0;
+        entity->entityState = ENTITY_IDLE;
+      }
+    } 
   }
 
   // clamp speed 
@@ -125,24 +160,17 @@ void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *came
 
   // TODO: check x collision
   if(entity->isAlive)
-    tileX = GetTileCollide(desiredPosition, tileMap, &points); 
+    tileX = GetTileCollide(desiredPosition, tileMap, &points, &entity->level); 
 
   // apply player's x position
   if(!tileX){
     entity->position.x = desiredPosition.x;
-  } else { 
-    
-    // check if not visible 
-    //if(!tileX->visible){
-    //  tileX->visible = true;
-    //}
-
+  } else {  
     switch(tileX->tileType){
       case TILE_MOVE:{
-        if(tileX->move){
-          entity->position.x += tileX->velocity.x * dt;
-          entity->velocity.x = 0;
-        }
+        entity->isAlive = false;
+        entity->position.x += tileX->velocity.x * dt;
+        entity->velocity.x = 0;
         break;
       }
       case TILE_DEADLY:{
@@ -157,7 +185,8 @@ void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *came
           entity->position.x = tileX->position.x + TILESIZE;
         entity->velocity.x = 0;
       }
-    } 
+    }
+    entity->entityState = ENTITY_HIT;
   }
 
   // update player's y position 
@@ -165,7 +194,7 @@ void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *came
   desiredPosition.y = entity->position.y + entity->velocity.y * dt;
  
   if(entity->isAlive)
-    tileY = GetTileCollide(desiredPosition, tileMap, &points);
+    tileY = GetTileCollide(desiredPosition, tileMap, &points, &entity->level);
 
   // TODO: check player's y collision
   // upply player's y position
@@ -173,17 +202,14 @@ void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *came
     entity->position.y = desiredPosition.y;
   } else { 
 
-    // check if not visible
-    //if(!tileY->visible){
-    //  tileY->visible = true;
-    //}  
-
-    if(entity->velocity.y > PLAYER_HEIGHT*2){
-      //printf("velocity y %f\n", entity->velocity.y);
+    // landing
+    if(entity->velocity.y > PLAYER_HEIGHT*3){
       entity->frameCounter = 0;
       entity->currentFrame = 0;
       entity->textureRec.y = 208;
       entity->velocity.y = 0;
+      entity->entityState = ENTITY_LAND;
+      PlaySound(sounds[1]);
     }
 
     switch(tileY->tileType){
@@ -217,6 +243,7 @@ void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *came
       case TILE_MACHINE:{
         entity->velocity.y += entity->acceleration * tileY->velocity.y;
         entity->velocity.x += entity->acceleration * tileY->velocity.x;
+        PlaySound(sounds[0]);
         break;
       }
       default:{ 
@@ -230,9 +257,7 @@ void EntityMove(Entity *entity, const float dt, TileMap *tileMap, Camera2D *came
         }
         entity->velocity.y = 0;
       } 
-    }  
-
-    //entity->velocity.y = 0;
+    }
   }
 }
 
